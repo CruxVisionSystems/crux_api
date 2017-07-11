@@ -13,7 +13,7 @@ int CruxParserInit(struct CruxParser* parse)
 
 int CruxParseChar(struct CruxParser* parse, uint8_t c)
 {
-	//printf("%02X ", c);
+    //printf("%02X ", c);
 
     if (parse == 0) return CRUX_GEN_ERROR;
     switch (parse->state)

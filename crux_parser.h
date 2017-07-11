@@ -16,14 +16,14 @@
 // A completed packet
 struct CruxPacket
 {
-	uint8_t function;
-	uint8_t data[CRUX_BUFFER_SIZE];
-	uint8_t checksum;
-	uint32_t size;
+    uint8_t function;
+    uint8_t data[CRUX_BUFFER_SIZE];
+    uint8_t checksum;
+    uint32_t size;
 
-	// 1 if bad checksum
-	// 0 if data is valid
-	uint8_t badchecksum;
+    // 1 if bad checksum
+    // 0 if data is valid
+    uint8_t badchecksum;
 };
 
 struct CruxParser

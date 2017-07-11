@@ -21,34 +21,34 @@ static volatile int savedImagesCounter[CRUX_MAX_NUM_CAMERAS];
 
 void _cruxUpdateImageBuffer(int id, struct CruxImage* image)
 {
-	// Swap buffers to allow a new buffer to be written.
-	pthread_mutex_lock(&bufferLock);
-	uint8_t* tmp = savedImages2[id].data;
-	savedImages2[id].data = image[id].data;
-	image[id].data = tmp;
+    // Swap buffers to allow a new buffer to be written.
+    pthread_mutex_lock(&bufferLock);
+    uint8_t* tmp = savedImages2[id].data;
+    savedImages2[id].data = image[id].data;
+    image[id].data = tmp;
     savedImagesCounter[id]++;
     pthread_mutex_unlock(&bufferLock);
 }
 
 struct CruxImage* Crux_ReadFrame(int id)
 {
-	if (id >= CRUX_MAX_NUM_CAMERAS) return 0;
+    if (id >= CRUX_MAX_NUM_CAMERAS) return 0;
 
-	static volatile int previousImageCounts[CRUX_MAX_NUM_CAMERAS];
+    static volatile int previousImageCounts[CRUX_MAX_NUM_CAMERAS];
 
-	// Wait until a new image is ready.
-	while (previousImageCounts[id] >= savedImagesCounter[id]);
+    // Wait until a new image is ready.
+    while (previousImageCounts[id] >= savedImagesCounter[id]);
 
-	// Swap buffers so that any new data doesn't corrupt our data unexpectedly.
-	pthread_mutex_lock(&bufferLock);
-	uint8_t* tmp = savedImages3[id].data;
-	savedImages3[id].data = savedImages2[id].data;
-	savedImages2[id].data = tmp;
-	pthread_mutex_unlock(&bufferLock);
+    // Swap buffers so that any new data doesn't corrupt our data unexpectedly.
+    pthread_mutex_lock(&bufferLock);
+    uint8_t* tmp = savedImages3[id].data;
+    savedImages3[id].data = savedImages2[id].data;
+    savedImages2[id].data = tmp;
+    pthread_mutex_unlock(&bufferLock);
 
-	previousImageCounts[id] = savedImagesCounter[id];
+    previousImageCounts[id] = savedImagesCounter[id];
 
-	return &savedImages3[id];
+    return &savedImages3[id];
 }
 
 // Main thread that reads in data from USB and converts it to images
@@ -94,34 +94,34 @@ void* _cruxmain(void* ptr)
         // Look for more bytes if none were sent since the last update.
         if (RxBytes <= 0) continue;
 
-		DWORD amountToRead = (CRUX_RECEIVE_BUFFER_SIZE > RxBytes) ? RxBytes : CRUX_RECEIVE_BUFFER_SIZE;
-		ftStatus = FT_Read(camHandles[0], RxBuffer, amountToRead, &BytesReceived);
+        DWORD amountToRead = (CRUX_RECEIVE_BUFFER_SIZE > RxBytes) ? RxBytes : CRUX_RECEIVE_BUFFER_SIZE;
+        ftStatus = FT_Read(camHandles[0], RxBuffer, amountToRead, &BytesReceived);
 
-		if (ftStatus != FT_OK)
-		{
-			printf("Critical FT_Read error (code %d)\n", ftStatus);
-			return (void*)CRUX_GEN_ERROR;
-		}
+        if (ftStatus != FT_OK)
+        {
+            printf("Critical FT_Read error (code %d)\n", ftStatus);
+            return (void*)CRUX_GEN_ERROR;
+        }
 
-		uint32_t i;
-		for (i = 0; i < BytesReceived; i++)
-		{
-			int result = CruxParseChar(&parser[0], (uint8_t)RxBuffer[i]);
+        uint32_t i;
+        for (i = 0; i < BytesReceived; i++)
+        {
+            int result = CruxParseChar(&parser[0], (uint8_t)RxBuffer[i]);
 
-			// if no packet was found, continue to next byte received
-			if (result != CRUX_PACKET_FOUND) continue;
+            // if no packet was found, continue to next byte received
+            if (result != CRUX_PACKET_FOUND) continue;
 
-			result = CruxStitchImage(&savedImages[0], &parser[0].packet);
+            result = CruxStitchImage(&savedImages[0], &parser[0].packet);
 
-			if (result != CRUX_IMAGE_FOUND) continue;
+            if (result != CRUX_IMAGE_FOUND) continue;
 
-			_cruxUpdateImageBuffer(0, &savedImages[0]);
+            _cruxUpdateImageBuffer(0, &savedImages[0]);
 
-			CruxStitchSetMetaData(&savedImages[0], imgWidth, imgHeight, imgType);
-		}
-	}
+            CruxStitchSetMetaData(&savedImages[0], imgWidth, imgHeight, imgType);
+        }
+    }
 
-	CruxStitchDeInit(&savedImages[0]);
+    CruxStitchDeInit(&savedImages[0]);
 }
 
 // TODO: Allow user to select specific FTDI port.
