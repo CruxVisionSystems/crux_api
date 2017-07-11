@@ -1,7 +1,7 @@
 #ifndef __CRUX_H__
 #define __CRUX_H__
 
-#include "ftd2xx.h"
+#include "ftdi_lib/ftd2xx.h"
 
 #include <stdint.h>
 
@@ -24,6 +24,9 @@ struct CruxImage
     // Raw data from the camera
     uint8_t* data;    
 
+    // Which camera source this came from.
+    uint8_t id; 
+
     // Type of image saved in data
     // 0 = 8-bit grayscale
     uint8_t type;
@@ -36,21 +39,11 @@ struct CruxImage
     uint32_t _pixelCounter;
 };
 
-// Blocking function that attempts to connect to a camera
-// Returns 0 if a camera was succesfully connected.
+// Attempt to connect to a camera
+// Returns CRUX_SUCCESS if a camera was succesfully connected.
 int Crux_ConnectCamera();
 
-// Returns information about the camera plugged in 
-// including resolution, framerate, and software version
-//CruxInfo Crux_GetCameraInfo();
-
-// Callback functions
-
-// Called when a new frame is saved.
-void* Crux_NewFrameCallback(struct CruxImage* image);
-
-// Called when a camera status changes 
-// Ex. when a camera is unplugged.
-//void* Crux_CameraStatus(void* arg);
+// Blocking function that returns when a new frame is sent to a specific id.
+struct CruxImage* Crux_ReadFrame(int id);
 
 #endif

@@ -39,15 +39,12 @@ int CruxParseChar(struct CruxParser* parse, uint8_t c)
             parse->_sum += c;
             parse->_data_counter++;
 
-            //printf("%02x ", c);
-
             if (parse->_data_counter > CRUX_BUFFER_SIZE-1)
                 parse->state = CRUX_STATE_CRC;
                 
             break;
 
         case CRUX_STATE_CRC: 
-        	printf("\n");
             parse->state = CRUX_STATE_PREAMBLE;
             parse->packet.checksum = parse->_sum;
             parse->packet.size = CRUX_BUFFER_SIZE;

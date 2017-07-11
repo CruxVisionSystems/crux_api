@@ -4,38 +4,57 @@
 
 #include <pthread.h>
 #include <stdio.h>
-
-static pthread_t mainthread;
-static FT_HANDLE camHandles[1];
-
-int main(int argc, char* argv[])
-{
-   // Unused 
-   (void)argc;
-   (void)argv;
-
-   Crux_ConnectCamera();
-
-   pthread_join(mainthread, NULL);
-   //Crux_Init();
-   return 0;
-}
-
-void* Crux_NewFrameCallback(struct CruxImage* image)
-{
-	printf("Got frame\n");
-
-	int i;
-	for (i = 0; i < image->width* image->height; i++)
-	{
-		printf("%02x ", image->data[i]);
-	}
-
-	return 0;
-}
+#include <string.h>
 
 #define CRUX_RECEIVE_BUFFER_SIZE 68*20
+#define CRUX_MAX_NUM_CAMERAS 4
 
+static pthread_t mainthread;
+static pthread_mutex_t bufferLock;
+static FT_HANDLE camHandles[CRUX_MAX_NUM_CAMERAS];
+
+// Triple buffers used for swapping.
+static struct CruxImage savedImages[CRUX_MAX_NUM_CAMERAS];
+static struct CruxImage savedImages2[CRUX_MAX_NUM_CAMERAS];
+static struct CruxImage savedImages3[CRUX_MAX_NUM_CAMERAS];
+static volatile int savedImagesCounter[CRUX_MAX_NUM_CAMERAS];
+
+void _cruxUpdateImageBuffer(int id, struct CruxImage* image)
+{
+	// Swap buffers to allow a new buffer to be written.
+	pthread_mutex_lock(&bufferLock);
+	uint8_t* tmp = savedImages2[id].data;
+	savedImages2[id].data = image[id].data;
+	image[id].data = tmp;
+    savedImagesCounter[id]++;
+    pthread_mutex_unlock(&bufferLock);
+}
+
+struct CruxImage* Crux_ReadFrame(int id)
+{
+	if (id >= CRUX_MAX_NUM_CAMERAS) return 0;
+
+	static volatile int previousImageCounts[CRUX_MAX_NUM_CAMERAS];
+
+	// Wait until a new image is ready.
+	while (previousImageCounts[id] >= savedImagesCounter[id]);
+
+	// Swap buffers so that any new data doesn't corrupt our data unexpectedly.
+	pthread_mutex_lock(&bufferLock);
+	uint8_t* tmp = savedImages3[id].data;
+	savedImages3[id].data = savedImages2[id].data;
+	savedImages2[id].data = tmp;
+	pthread_mutex_unlock(&bufferLock);
+
+	previousImageCounts[id] = savedImagesCounter[id];
+
+	return &savedImages3[id];
+}
+
+// Main thread that reads in data from USB and converts it to images
+// TODO: Some effort has been put in to allow multiple cameras
+//       to be used at once in a single thread, but it's not entirely
+//       implemented yet.
 void* _cruxmain(void* ptr)
 {
     (void)ptr;
@@ -47,15 +66,24 @@ void* _cruxmain(void* ptr)
     DWORD RxBytes;
     DWORD BytesReceived;
     char RxBuffer[CRUX_RECEIVE_BUFFER_SIZE];
-    struct CruxParser parser;
-    struct CruxImage image;
+    struct CruxParser parser[CRUX_MAX_NUM_CAMERAS];
 
     int imgWidth = 120;
     int imgHeight = 64;
     int imgType = CRUX_8B_GRAY;
 
-    CruxParserInit(&parser);
-    CruxStitchInit(&image, imgWidth, imgHeight, imgType);
+    // Initialize memory on buffers
+    pthread_mutex_lock(&bufferLock);
+    int result = 0;
+    result |= CruxParserInit(&parser[0]);
+    result |= CruxStitchInit(&savedImages[0], imgWidth, imgHeight, imgType);
+    result |= CruxStitchInit(&savedImages2[0], imgWidth, imgHeight, imgType);
+    result |= CruxStitchInit(&savedImages3[0], imgWidth, imgHeight, imgType);
+    savedImagesCounter[0] = 0;
+    pthread_mutex_unlock(&bufferLock);
+
+    // Defensive check, in case something went wrong.
+    if (result >= CRUX_GEN_ERROR) return (void*)CRUX_GEN_ERROR;
 
     FT_Purge(camHandles[0], FT_PURGE_RX | FT_PURGE_TX);
 
@@ -78,24 +106,25 @@ void* _cruxmain(void* ptr)
 		uint32_t i;
 		for (i = 0; i < BytesReceived; i++)
 		{
-			int result = CruxParseChar(&parser, (uint8_t)RxBuffer[i]);
+			int result = CruxParseChar(&parser[0], (uint8_t)RxBuffer[i]);
 
 			// if no packet was found, continue to next byte received
 			if (result != CRUX_PACKET_FOUND) continue;
 
-			result = CruxStitchImage(&image, &parser.packet);
+			result = CruxStitchImage(&savedImages[0], &parser[0].packet);
 
 			if (result != CRUX_IMAGE_FOUND) continue;
 
-			Crux_NewFrameCallback(&image);
+			_cruxUpdateImageBuffer(0, &savedImages[0]);
 
-			CruxStitchSetMetaData(&image, imgWidth, imgHeight, imgType);
+			CruxStitchSetMetaData(&savedImages[0], imgWidth, imgHeight, imgType);
 		}
 	}
 
-	CruxStitchDeInit(&image);
+	CruxStitchDeInit(&savedImages[0]);
 }
 
+// TODO: Allow user to select specific FTDI port.
 int Crux_ConnectCamera()
 {
     FT_STATUS ftStatus;
