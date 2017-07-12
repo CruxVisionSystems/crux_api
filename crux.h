@@ -1,8 +1,6 @@
 #ifndef __CRUX_H__
 #define __CRUX_H__
 
-#include "ftdi_lib/ftd2xx.h"
-
 #include <stdint.h>
 
 // Image types

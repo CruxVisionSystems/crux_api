@@ -2,6 +2,8 @@
 #include "crux_parser.h"
 #include "crux_stitch.h"
 
+#include "lib/ftd2xx.h"
+
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>

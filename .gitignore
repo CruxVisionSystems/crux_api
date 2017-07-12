@@ -6,3 +6,5 @@ bin/
 .cproject 
 .project
 *.o
+libcruxapi.a
+examples/build/

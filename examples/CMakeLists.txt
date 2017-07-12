@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 2.8)
+project(basic_example)
+include_directories(..)
+add_executable(basic_example basic/main.c)
+target_link_libraries(basic_example ${CMAKE_SOURCE_DIR}/../libcruxapi.a pthread dl)
